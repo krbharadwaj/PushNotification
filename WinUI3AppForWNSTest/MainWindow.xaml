@@ -29,6 +29,9 @@
                 Click="InitializePushButton_Click" Margin="0,0,0,10" HorizontalAlignment="Left"/>
         
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="RegisterWithServerButton" Content="Register with Server" 
+                    Click="RegisterWithServerButton_Click" Margin="0,0,10,0" IsEnabled="False" 
+                    Background="Green" Foreground="White"/>
             <Button x:Name="SendTestPushButton" Content="Send Test Push" 
                     Click="SendTestPushButton_Click" Margin="0,0,10,0" IsEnabled="False"/>
             <Button x:Name="TroubleshootButton" Content="Troubleshoot" 

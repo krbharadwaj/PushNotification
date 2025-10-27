@@ -17,14 +17,116 @@ namespace WinUI3AppForWNSTest
     /// </summary>
     public class PushManager
     {
-        // Azure AD Application Registration Details
-        // IMPORTANT: Replace with your actual Azure AD app registration Object ID
-        // This should be the Object ID from the Enterprise Application (Service Principal), NOT the App Registration Object ID
-        // See SECRETS.md (local file) for actual working credentials
-        private static readonly Guid AzureObjectId = new Guid("YOUR_AZURE_OBJECT_ID_HERE"); // Replace with your Azure Object ID
-        private static readonly Guid AzureAppId = new Guid("YOUR_AZURE_APP_ID_HERE");
-        private const string TenantId = "YOUR_TENANT_ID_HERE";
-        private const string ClientSecret = "YOUR_CLIENT_SECRET_HERE";
+        // Azure AD Application Registration Details - Loaded from SECRETS.config
+        // IMPORTANT: This uses the Object ID from the Enterprise Application (Service Principal), NOT the App Registration Object ID
+        private static readonly Lazy<Dictionary<string, string>> _secrets = new(() => LoadSecrets());
+        
+        private static readonly Guid AzureObjectId = GetGuidFromSecrets("AzureObjectId", "fb750b7b-c2b6-4106-b556-b9b1fac4d1f6");
+        private static readonly Guid AzureAppId = GetGuidFromSecrets("ClientId", "9c959ee1-3eb8-4cfa-a528-4a04331dbdd9");
+        private static readonly string TenantId = _secrets.Value.GetValueOrDefault("TenantId") ?? "YOUR_TENANT_ID_HERE";
+        private static readonly string ClientSecret = _secrets.Value.GetValueOrDefault("ClientSecret") ?? "YOUR_CLIENT_SECRET_HERE";
+
+        /// <summary>
+        /// Safely get GUID from secrets with fallback
+        /// </summary>
+        private static Guid GetGuidFromSecrets(string key, string fallbackValue)
+        {
+            try
+            {
+                var value = _secrets.Value.GetValueOrDefault(key);
+                if (!string.IsNullOrEmpty(value) && value != $"YOUR_{key.ToUpper()}_HERE")
+                {
+                    return new Guid(value);
+                }
+                return new Guid(fallbackValue);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error parsing GUID for {key}: {ex.Message}, using fallback");
+                return new Guid(fallbackValue);
+            }
+        }
+
+        /// <summary>
+        /// Load secrets from SECRETS.config file
+        /// </summary>
+        private static Dictionary<string, string> LoadSecrets()
+        {
+            var secrets = new Dictionary<string, string>();
+            
+            // Try multiple possible locations for SECRETS.config
+            var possiblePaths = new[]
+            {
+                // Project root (most likely for development)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "SECRETS.config"),
+                // Current directory
+                Path.Combine(Directory.GetCurrentDirectory(), "SECRETS.config"),
+                // One level up from current directory  
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "SECRETS.config"),
+                // Solution root (assuming we're in a subdirectory)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "SECRETS.config"),
+                // AppX package directory (for packaged apps)
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages", "WinUI3AppForWNSTest", "SECRETS.config")
+            };
+            
+            string? foundPath = null;
+            foreach (var path in possiblePaths)
+            {
+                try
+                {
+                    var normalizedPath = Path.GetFullPath(path);
+                    if (File.Exists(normalizedPath))
+                    {
+                        foundPath = normalizedPath;
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error checking path {path}: {ex.Message}");
+                }
+            }
+            
+            if (foundPath != null)
+            {
+                try
+                {
+                    foreach (var line in File.ReadAllLines(foundPath))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line) && line.Contains('='))
+                        {
+                            var parts = line.Split('=', 2);
+                            if (parts.Length == 2)
+                            {
+                                secrets[parts[0].Trim()] = parts[1].Trim();
+                            }
+                        }
+                    }
+                    Debug.WriteLine($"✅ Loaded {secrets.Count} secrets from: {foundPath}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"❌ Error reading SECRETS.config: {ex.Message}");
+                }
+            }
+            else
+            {
+                Debug.WriteLine($"⚠️ SECRETS.config not found in any of the expected locations");
+                Debug.WriteLine("Searched paths:");
+                foreach (var path in possiblePaths)
+                {
+                    try
+                    {
+                        Debug.WriteLine($"  - {Path.GetFullPath(path)}");
+                    }
+                    catch
+                    {
+                        Debug.WriteLine($"  - {path} (invalid path)");
+                    }
+                }
+            }
+            return secrets;
+        }
 
         // Events for communication with UI
         public static event Action<string>? StatusUpdated;
@@ -157,16 +259,61 @@ namespace WinUI3AppForWNSTest
                 var payloadBytes = args.Payload;
                 var payloadString = Encoding.UTF8.GetString(payloadBytes);
                 
-                Debug.WriteLine($"Push notification received (foreground): {payloadString}");
-                StatusUpdated?.Invoke($"📩 Push received: {payloadString}");
+                // Immediate notification that push was received
+                Console.WriteLine($"\n🔔 === PUSH NOTIFICATION RECEIVED ===");
+                StatusUpdated?.Invoke($"🔔 PUSH NOTIFICATION RECEIVED!");
+                
+                // Enhanced logging for push notification received
+                Debug.WriteLine($"🔔 PUSH NOTIFICATION RECEIVED (FOREGROUND)");
+                Debug.WriteLine($"📅 Received at: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+                Debug.WriteLine($"📦 Raw payload: {payloadString}");
+                Debug.WriteLine($"📏 Payload size: {payloadBytes.Length} bytes");
+                
+                // Try to parse the JSON payload for better logging
+                string messageText = "Unknown message";
+                string titleText = "No title";
+                
+                try
+                {
+                    var jsonDoc = System.Text.Json.JsonDocument.Parse(payloadString);
+                    if (jsonDoc.RootElement.TryGetProperty("message", out var msgElement))
+                    {
+                        messageText = msgElement.GetString() ?? "Empty message";
+                    }
+                    if (jsonDoc.RootElement.TryGetProperty("title", out var titleElement))
+                    {
+                        titleText = titleElement.GetString() ?? "No title";
+                    }
+                }
+                catch
+                {
+                    // If JSON parsing fails, use the raw string as message
+                    messageText = payloadString;
+                }
+                
+                // User-friendly status updates
+                StatusUpdated?.Invoke($"🔔 PUSH NOTIFICATION RECEIVED!");
+                StatusUpdated?.Invoke($"📋 Title: {titleText}");
+                StatusUpdated?.Invoke($"� Message: {messageText}");
+                StatusUpdated?.Invoke($"⏰ Received: {DateTime.Now:HH:mm:ss}");
+                StatusUpdated?.Invoke($"📦 Full payload: {payloadString}");
+                
+                // Console output for easy debugging
+                Console.WriteLine($"\n🔔 === PUSH NOTIFICATION RECEIVED ===");
+                Console.WriteLine($"Title: {titleText}");
+                Console.WriteLine($"Message: {messageText}");
+                Console.WriteLine($"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                Console.WriteLine($"Raw: {payloadString}");
+                Console.WriteLine($"=======================================\n");
                 
                 // Notify subscribers about the received notification
                 NotificationReceived?.Invoke(payloadString);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"OnPushReceived exception: {ex}");
+                Debug.WriteLine($"❌ OnPushReceived exception: {ex}");
                 StatusUpdated?.Invoke($"❌ Error processing push notification: {ex.Message}");
+                Console.WriteLine($"❌ Push notification error: {ex.Message}");
             }
         }
 
@@ -186,7 +333,7 @@ namespace WinUI3AppForWNSTest
                         break;
 
                     case ExtendedActivationKind.Push:
-                        StatusUpdated?.Invoke("📩 App activated by push notification");
+                        StatusUpdated?.Invoke("� APP ACTIVATED BY PUSH NOTIFICATION!");
                         
                         // Handle background push activation
                         if (args.Data is PushNotificationReceivedEventArgs pushArgs)
@@ -196,10 +343,51 @@ namespace WinUI3AppForWNSTest
                             
                             try
                             {
-                            // Process the background push notification
-                            var payload = pushArgs.Payload;
-                            var payloadString = Encoding.UTF8.GetString(payload);                                Debug.WriteLine($"Background push notification: {payloadString}");
-                                StatusUpdated?.Invoke($"📩 Background push: {payloadString}");
+                                // Process the background push notification
+                                var payload = pushArgs.Payload;
+                                var payloadString = Encoding.UTF8.GetString(payload);
+                                
+                                // Enhanced logging for background activation
+                                Debug.WriteLine($"🚀 BACKGROUND PUSH ACTIVATION");
+                                Debug.WriteLine($"📅 Activated at: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+                                Debug.WriteLine($"📦 Payload: {payloadString}");
+                                
+                                // Try to parse the JSON payload for better logging
+                                string messageText = "Unknown message";
+                                string titleText = "No title";
+                                
+                                try
+                                {
+                                    var jsonDoc = System.Text.Json.JsonDocument.Parse(payloadString);
+                                    if (jsonDoc.RootElement.TryGetProperty("message", out var msgElement))
+                                    {
+                                        messageText = msgElement.GetString() ?? "Empty message";
+                                    }
+                                    if (jsonDoc.RootElement.TryGetProperty("title", out var titleElement))
+                                    {
+                                        titleText = titleElement.GetString() ?? "No title";
+                                    }
+                                }
+                                catch
+                                {
+                                    messageText = payloadString;
+                                }
+                                
+                                // User-friendly status updates
+                                StatusUpdated?.Invoke($"🚀 BACKGROUND ACTIVATION SUCCESSFUL!");
+                                StatusUpdated?.Invoke($"� Push Title: {titleText}");
+                                StatusUpdated?.Invoke($"💬 Push Message: {messageText}");
+                                StatusUpdated?.Invoke($"⏰ Activated at: {DateTime.Now:HH:mm:ss}");
+                                StatusUpdated?.Invoke($"📦 Full payload: {payloadString}");
+                                
+                                // Console output for debugging
+                                Console.WriteLine($"\n🚀 === BACKGROUND PUSH ACTIVATION ===");
+                                Console.WriteLine($"Title: {titleText}");
+                                Console.WriteLine($"Message: {messageText}");
+                                Console.WriteLine($"Activated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                                Console.WriteLine($"Raw: {payloadString}");
+                                Console.WriteLine($"====================================\n");
+                                
                                 NotificationReceived?.Invoke(payloadString);
                                 
                                 // Perform any necessary background work here
@@ -432,6 +620,63 @@ namespace WinUI3AppForWNSTest
                 return (_currentChannel.Uri.ToString(), _currentChannel.ExpirationTime);
             }
             return (null, null);
+        }
+
+        /// <summary>
+        /// Register device with SimplePushServer (for background activation testing)
+        /// </summary>
+        public static async Task<bool> RegisterWithServerAsync(string deviceId = "winui3-device", string userId = "testuser")
+        {
+            try
+            {
+                var (channelUri, expiry) = GetCurrentChannel();
+                if (string.IsNullOrEmpty(channelUri))
+                {
+                    StatusUpdated?.Invoke("❌ No channel URI available. Initialize push notifications first.");
+                    return false;
+                }
+
+                StatusUpdated?.Invoke($"🔄 Registering device with SimplePushServer...");
+                StatusUpdated?.Invoke($"📋 Device ID: {deviceId}");
+                StatusUpdated?.Invoke($"📋 Channel: {channelUri.Substring(0, Math.Min(50, channelUri.Length))}...");
+
+                using var client = new System.Net.Http.HttpClient();
+                var registrationData = new
+                {
+                    deviceId = deviceId,
+                    channelUri = channelUri,
+                    userId = userId
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(registrationData);
+                var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync("http://localhost:5000/register", content);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    StatusUpdated?.Invoke($"✅ Device registered successfully!");
+                    StatusUpdated?.Invoke($"🎯 Ready for background activation - you can now close this app");
+                    StatusUpdated?.Invoke($"📤 Send notifications via: POST http://localhost:5000/send");
+                    Debug.WriteLine($"Registration response: {responseJson}");
+                    return true;
+                }
+                else
+                {
+                    var errorText = await response.Content.ReadAsStringAsync();
+                    StatusUpdated?.Invoke($"❌ Registration failed: {response.StatusCode}");
+                    StatusUpdated?.Invoke($"❌ Error: {errorText}");
+                    Debug.WriteLine($"Registration failed: {response.StatusCode} - {errorText}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusUpdated?.Invoke($"❌ Registration exception: {ex.Message}");
+                Debug.WriteLine($"RegisterWithServerAsync exception: {ex}");
+                return false;
+            }
         }
 
         /// <summary>

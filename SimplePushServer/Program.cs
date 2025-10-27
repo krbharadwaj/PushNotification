@@ -2,6 +2,36 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+// Load secrets from config file
+static Dictionary<string, string> LoadSecrets()
+{
+    var secrets = new Dictionary<string, string>();
+    var configPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "SECRETS.config");
+    
+    if (File.Exists(configPath))
+    {
+        foreach (var line in File.ReadAllLines(configPath))
+        {
+            if (!string.IsNullOrWhiteSpace(line) && line.Contains('='))
+            {
+                var parts = line.Split('=', 2);
+                if (parts.Length == 2)
+                {
+                    secrets[parts[0].Trim()] = parts[1].Trim();
+                }
+            }
+        }
+        Console.WriteLine($"✅ Loaded {secrets.Count} secrets from SECRETS.config");
+    }
+    else
+    {
+        Console.WriteLine($"⚠️ SECRETS.config not found at: {configPath}");
+    }
+    return secrets;
+}
+
+var secrets = LoadSecrets();
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -24,11 +54,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
-// Azure AD Configuration - Replace with your values or use environment variables
-// See SECRETS.md (local file) for actual working credentials
-var TenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID") ?? "YOUR_TENANT_ID_HERE";
-var ClientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID") ?? "YOUR_CLIENT_ID_HERE";
-var ClientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET") ?? "YOUR_CLIENT_SECRET_HERE";
+// Azure AD Configuration - Loaded from SECRETS.config
+var TenantId = secrets.GetValueOrDefault("TenantId") ?? Environment.GetEnvironmentVariable("AZURE_TENANT_ID") ?? "YOUR_TENANT_ID_HERE";
+var ClientId = secrets.GetValueOrDefault("ClientId") ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_ID") ?? "YOUR_CLIENT_ID_HERE";
+var ClientSecret = secrets.GetValueOrDefault("ClientSecret") ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET") ?? "YOUR_CLIENT_SECRET_HERE";
 
 // Simple in-memory storage for device registrations
 var registeredDevices = new Dictionary<string, DeviceInfo>();

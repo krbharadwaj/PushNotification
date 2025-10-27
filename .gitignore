@@ -394,6 +394,7 @@ push_log.txt
 # Local secrets file - DO NOT COMMIT
 secrets.json
 SECRETS.md
+SECRETS.config
 *secrets*
 *SECRETS*
 AZURE_CONFIG.md

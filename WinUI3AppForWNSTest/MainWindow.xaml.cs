@@ -77,6 +77,9 @@ namespace WinUI3AppForWNSTest
                 _channelUri = uri;
                 AppendLog($"📋 Channel URI received: {uri}");
                 AppendLog($"⏰ Expires: {expiry:yyyy-MM-dd HH:mm:ss}");
+                
+                // Enable registration button when channel is available
+                RegisterWithServerButton.IsEnabled = true;
             });
         }
         
@@ -98,6 +101,32 @@ namespace WinUI3AppForWNSTest
                 
                 if (success)
                 {
+                    // Automatically register with SimplePushServer after successful initialization
+                    AppendLog("🔄 Auto-registering device with SimplePushServer...");
+                    var registrationSuccess = await PushManager.RegisterWithServerAsync("winui3-device", "testuser");
+                    
+                    if (registrationSuccess)
+                    {
+                        AppendLog("✅ DEVICE AUTO-REGISTERED SUCCESSFULLY!");
+                        AppendLog("🎯 READY FOR BACKGROUND TESTING:");
+                        AppendLog("   ✓ Device registered with server");
+                        AppendLog("   ✓ Close this app and send notifications from SimplePushServer");
+                        AppendLog("   ✓ App will activate automatically on push notifications!");
+                        
+                        // Update status
+                        StatusTextBlock.Text = "Auto-registered - Ready for background activation";
+                        StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
+                        
+                        // Disable manual registration button since it's already done
+                        RegisterWithServerButton.IsEnabled = false;
+                        RegisterWithServerButton.Content = "✅ Already Registered";
+                    }
+                    else
+                    {
+                        AppendLog("⚠️ Auto-registration failed, you can try manual registration");
+                        RegisterWithServerButton.IsEnabled = true;
+                    }
+                    
                     // Try to get access token for testing
                     AppendLog("🔄 Requesting access token for testing...");
                     _accessToken = await PushManager.RequestAccessTokenAsync();
@@ -122,6 +151,40 @@ namespace WinUI3AppForWNSTest
             finally
             {
                 InitializePushButton.IsEnabled = true;
+            }
+        }
+
+        private async void RegisterWithServerButton_Click(object sender, RoutedEventArgs e)
+        {
+            RegisterWithServerButton.IsEnabled = false;
+            
+            try
+            {
+                AppendLog("🔄 Registering device with SimplePushServer for background activation...");
+                
+                var success = await PushManager.RegisterWithServerAsync("winui3-device", "testuser");
+                
+                if (success)
+                {
+                    AppendLog("🎯 READY FOR BACKGROUND TESTING:");
+                    AppendLog("   1. Close this WinUI3 app completely");
+                    AppendLog("   2. Use SimplePushServer to send notifications");
+                    AppendLog("   3. WinUI3 app will activate in background!");
+                    
+                    // Update status
+                    StatusTextBlock.Text = "Registered - Ready for background activation";
+                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"❌ Registration failed: {ex.Message}");
+                StatusTextBlock.Text = "Registration failed";
+                StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
+            }
+            finally
+            {
+                RegisterWithServerButton.IsEnabled = true;
             }
         }
         
