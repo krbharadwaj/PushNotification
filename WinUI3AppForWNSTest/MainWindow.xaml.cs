@@ -127,19 +127,19 @@ namespace WinUI3AppForWNSTest
                         RegisterWithServerButton.IsEnabled = true;
                     }
                     
-                    // Try to get access token for testing
-                    AppendLog("🔄 Requesting access token for testing...");
+                    // Try to get access token for testing (expected to fail with placeholder credentials)
                     _accessToken = await PushManager.RequestAccessTokenAsync();
-                }
-                
-                if (!string.IsNullOrEmpty(_accessToken))
-                {
-                    AppendLog("✅ Access token obtained successfully");
-                    SendTestPushButton.IsEnabled = true;
-                }
-                else
-                {
-                    AppendLog("⚠️ Could not obtain access token (normal for client-side apps)");
+                    
+                    if (!string.IsNullOrEmpty(_accessToken))
+                    {
+                        AppendLog("✅ Access token obtained - test push button enabled");
+                        SendTestPushButton.IsEnabled = true;
+                    }
+                    else
+                    {
+                        AppendLog("ℹ️ Client uses placeholder credentials (SimplePushServer handles real authentication)");
+                        AppendLog("💡 Use SimplePushServer to send push notifications");
+                    }
                 }
             }
             catch (Exception ex)
