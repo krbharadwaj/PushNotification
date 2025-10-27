@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WinUI3AppForWNSTest.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinUI3AppForWNSTest"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="WinUI3AppForWNSTest">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Push Notification Test" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
+        
+        <Button Grid.Row="1" x:Name="InitializePushButton" Content="Initialize Push Notifications" 
+                Click="InitializePushButton_Click" Margin="0,0,0,10" HorizontalAlignment="Left"/>
+        
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="SendTestPushButton" Content="Send Test Push" 
+                    Click="SendTestPushButton_Click" Margin="0,0,10,0" IsEnabled="False"/>
+            <Button x:Name="TroubleshootButton" Content="Troubleshoot" 
+                    Click="TroubleshootButton_Click" Margin="0,0,10,0"/>
+            <TextBox x:Name="TestMessageTextBox" PlaceholderText="Enter test message" 
+                     Width="200" Margin="0,0,0,0"/>
+        </StackPanel>
+        
+        <TextBlock Grid.Row="3" Text="Status:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="4" x:Name="StatusTextBlock" Text="Not initialized" 
+                   Foreground="Gray" Margin="0,0,0,10"/>
+        
+        <ScrollViewer Grid.Row="5">
+            <TextBlock x:Name="LogTextBlock" Text="Log will appear here..." 
+                       TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+        </ScrollViewer>
+    </Grid>
+</Window>
