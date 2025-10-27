@@ -7,7 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="WinUI3AppForWNSTest">
+    Title="Dual Push Notification Test - WNS + VAPID">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -23,30 +23,43 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Push Notification Test" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
+        <TextBlock Grid.Row="0" Text="Dual Push Notifications - WNS + VAPID" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
         
-        <Button Grid.Row="1" x:Name="InitializePushButton" Content="Initialize Push Notifications" 
-                Click="InitializePushButton_Click" Margin="0,0,0,10" HorizontalAlignment="Left"/>
+        <!-- VAPID Section -->
+        <Border Grid.Row="1" Background="#E8F5E8" Padding="15" CornerRadius="8" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="🌐 VAPID Web Push (New Implementation)" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" Foreground="DarkGreen"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="GenerateKeysButton" Content="🔑 Generate VAPID Key-Pair" 
+                            Click="GenerateKeysButton_Click" Margin="0,0,15,0" 
+                            Background="DarkGreen" Foreground="White" Padding="15,10" FontSize="13"/>
+                    <Button x:Name="SubscribeButton" Content="📡 Subscribe" 
+                            Click="SubscribeButton_Click" Margin="0,0,0,0" IsEnabled="False"
+                            Background="DarkBlue" Foreground="White" Padding="15,10" FontSize="13"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
         
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button x:Name="RegisterWithServerButton" Content="Register with Server" 
-                    Click="RegisterWithServerButton_Click" Margin="0,0,10,0" IsEnabled="False" 
-                    Background="Green" Foreground="White"/>
-            <Button x:Name="SendTestPushButton" Content="Send Test Push" 
-                    Click="SendTestPushButton_Click" Margin="0,0,10,0" IsEnabled="False"/>
-            <Button x:Name="TroubleshootButton" Content="Troubleshoot" 
-                    Click="TroubleshootButton_Click" Margin="0,0,10,0"/>
-            <TextBox x:Name="TestMessageTextBox" PlaceholderText="Enter test message" 
-                     Width="200" Margin="0,0,0,0"/>
-        </StackPanel>
+        <!-- WNS Section -->
+        <Border Grid.Row="2" Background="#E8E8F5" Padding="15" CornerRadius="8" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="📱 Traditional WNS Push (Existing Implementation)" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" Foreground="DarkBlue"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="InitializeWnsButton" Content="🚀 Initialize WNS" 
+                            Click="InitializeWnsButton_Click" Margin="0,0,15,0" 
+                            Background="DarkOrange" Foreground="White" Padding="15,10" FontSize="13"/>
+                    <Button x:Name="RegisterWnsButton" Content="📋 Register with Server" 
+                            Click="RegisterWnsButton_Click" Margin="0,0,0,0" IsEnabled="False"
+                            Background="Purple" Foreground="White" Padding="15,10" FontSize="13"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
         
-        <TextBlock Grid.Row="3" Text="Status:" FontWeight="Bold" Margin="0,0,0,5"/>
-        <TextBlock Grid.Row="4" x:Name="StatusTextBlock" Text="Not initialized" 
-                   Foreground="Gray" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="3" Text="Log:" FontWeight="Bold" Margin="0,0,0,10"/>
         
-        <ScrollViewer Grid.Row="5">
-            <TextBlock x:Name="LogTextBlock" Text="Log will appear here..." 
-                       TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+        <ScrollViewer Grid.Row="4" Background="#F5F5F5" Padding="10" CornerRadius="5">
+            <TextBlock x:Name="LogTextBlock" Text="Choose your push notification implementation above..." 
+                       TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" LineHeight="16"/>
         </ScrollViewer>
     </Grid>
 </Window>

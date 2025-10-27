@@ -1,277 +1,108 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace WinUI3AppForWNSTest
 {
     /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
+    /// Dual push notification window - VAPID + WNS
     /// </summary>
     public sealed partial class MainWindow : Window
     {
-        private string? _channelUri;
-        private string? _accessToken;
-        
         public MainWindow()
         {
-            InitializeComponent();
+            this.InitializeComponent();
             
-            // Subscribe to push notifications
-            PushManager.NotificationReceived += OnPushNotificationReceived;
+            // Subscribe to WebPush status updates (VAPID)
+            WebPushManager.StatusUpdated += (status) => DispatcherQueue.TryEnqueue(() => AppendLog($"[VAPID] {status}"));
             
-            // Set default test message
-            TestMessageTextBox.Text = "Hello from WinUI3 Push Test!";
-        }
-        
-        private void OnPushNotificationReceived(string payload)
-        {
-            // Update UI on the UI thread
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                AppendLog($"📩 Push notification received: {payload}");
+            // Subscribe to PushManager status updates (WNS)
+            PushManager.StatusUpdated += (status) => DispatcherQueue.TryEnqueue(() => AppendLog($"[WNS] {status}"));
+            PushManager.ChannelReceived += (uri, expiry) => DispatcherQueue.TryEnqueue(() => {
+                AppendLog($"[WNS] ✅ Channel received: {uri.Substring(0, Math.Min(50, uri.Length))}...");
+                AppendLog($"[WNS] ⏰ Expires: {expiry:yyyy-MM-dd HH:mm:ss}");
+                RegisterWnsButton.IsEnabled = true;
             });
-        }
-        
-        private void OnStatusUpdated(string status)
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                StatusTextBlock.Text = status;
-                
-                if (status.Contains("✅"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
-                }
-                else if (status.Contains("❌"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-                }
-                else if (status.Contains("🔄"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
-                }
-                
-                AppendLog(status);
-            });
-        }
-        
-        private void OnChannelReceived(string uri, DateTimeOffset expiry)
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                _channelUri = uri;
-                AppendLog($"📋 Channel URI received: {uri}");
-                AppendLog($"⏰ Expires: {expiry:yyyy-MM-dd HH:mm:ss}");
-                
-                // Enable registration button when channel is available
-                RegisterWithServerButton.IsEnabled = true;
-            });
-        }
-        
-        private async void InitializePushButton_Click(object sender, RoutedEventArgs e)
-        {
-            InitializePushButton.IsEnabled = false;
-            StatusTextBlock.Text = "Initializing...";
-            StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
-            
-            AppendLog("🔄 Starting push notification initialization...");
-            
-            try
-            {
-                // Subscribe to status updates
-                PushManager.StatusUpdated += OnStatusUpdated;
-                PushManager.ChannelReceived += OnChannelReceived;
-                
-                var success = await PushManager.InitializeAsync();
-                
-                if (success)
-                {
-                    // Automatically register with SimplePushServer after successful initialization
-                    AppendLog("🔄 Auto-registering device with SimplePushServer...");
-                    var registrationSuccess = await PushManager.RegisterWithServerAsync("winui3-device", "testuser");
-                    
-                    if (registrationSuccess)
-                    {
-                        AppendLog("✅ DEVICE AUTO-REGISTERED SUCCESSFULLY!");
-                        AppendLog("🎯 READY FOR BACKGROUND TESTING:");
-                        AppendLog("   ✓ Device registered with server");
-                        AppendLog("   ✓ Close this app and send notifications from SimplePushServer");
-                        AppendLog("   ✓ App will activate automatically on push notifications!");
-                        
-                        // Update status
-                        StatusTextBlock.Text = "Auto-registered - Ready for background activation";
-                        StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
-                        
-                        // Disable manual registration button since it's already done
-                        RegisterWithServerButton.IsEnabled = false;
-                        RegisterWithServerButton.Content = "✅ Already Registered";
-                    }
-                    else
-                    {
-                        AppendLog("⚠️ Auto-registration failed, you can try manual registration");
-                        RegisterWithServerButton.IsEnabled = true;
-                    }
-                    
-                    // Try to get access token for testing (expected to fail with placeholder credentials)
-                    _accessToken = await PushManager.RequestAccessTokenAsync();
-                    
-                    if (!string.IsNullOrEmpty(_accessToken))
-                    {
-                        AppendLog("✅ Access token obtained - test push button enabled");
-                        SendTestPushButton.IsEnabled = true;
-                    }
-                    else
-                    {
-                        AppendLog("ℹ️ Client uses placeholder credentials (SimplePushServer handles real authentication)");
-                        AppendLog("💡 Use SimplePushServer to send push notifications");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"❌ Initialization failed: {ex.Message}");
-                StatusTextBlock.Text = "Initialization failed";
-                StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-            }
-            finally
-            {
-                InitializePushButton.IsEnabled = true;
-            }
+            PushManager.NotificationReceived += (payload) => DispatcherQueue.TryEnqueue(() => AppendLog($"[WNS] 🔔 PUSH RECEIVED: {payload}"));
         }
 
-        private async void RegisterWithServerButton_Click(object sender, RoutedEventArgs e)
+        private void GenerateKeysButton_Click(object sender, RoutedEventArgs e)
         {
-            RegisterWithServerButton.IsEnabled = false;
+            GenerateKeysButton.IsEnabled = false;
             
-            try
+            AppendLog("🚀 Step 1: Generating VAPID keys...");
+            
+            bool success = WebPushManager.GenerateVapidKeys();
+            
+            if (success)
             {
-                AppendLog("🔄 Registering device with SimplePushServer for background activation...");
-                
-                var success = await PushManager.RegisterWithServerAsync("winui3-device", "testuser");
-                
-                if (success)
-                {
-                    AppendLog("🎯 READY FOR BACKGROUND TESTING:");
-                    AppendLog("   1. Close this WinUI3 app completely");
-                    AppendLog("   2. Use SimplePushServer to send notifications");
-                    AppendLog("   3. WinUI3 app will activate in background!");
-                    
-                    // Update status
-                    StatusTextBlock.Text = "Registered - Ready for background activation";
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
-                }
+                SubscribeButton.IsEnabled = true;
+                AppendLog("✅ Keys generated! Now click Subscribe to create channel.");
             }
-            catch (Exception ex)
-            {
-                AppendLog($"❌ Registration failed: {ex.Message}");
-                StatusTextBlock.Text = "Registration failed";
-                StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-            }
-            finally
-            {
-                RegisterWithServerButton.IsEnabled = true;
-            }
+            
+            GenerateKeysButton.IsEnabled = true;
         }
-        
-        private async void SendTestPushButton_Click(object sender, RoutedEventArgs e)
+
+        private async void SubscribeButton_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_channelUri) || string.IsNullOrEmpty(_accessToken))
+            SubscribeButton.IsEnabled = false;
+            
+            AppendLog("🚀 Step 2: Creating subscription and sending to server...");
+            
+            bool success = await WebPushManager.SubscribeAsync();
+            
+            if (success)
             {
-                AppendLog("❌ Cannot send push: Channel URI or access token not available");
-                return;
+                AppendLog("🎉 Complete! SimplePushServer can now send push messages.");
             }
             
-            SendTestPushButton.IsEnabled = false;
-            
-            try
-            {
-                var testMessage = TestMessageTextBox.Text;
-                if (string.IsNullOrEmpty(testMessage))
-                {
-                    testMessage = "Test notification from WinUI3 app";
-                }
-                
-                AppendLog($"📤 Sending test push notification: {testMessage}");
-                
-                var success = await PushManager.SendRawPushNotificationAsync(_channelUri, _accessToken, testMessage);
-                
-                if (success)
-                {
-                    AppendLog("✅ Test push notification sent successfully");
-                }
-                else
-                {
-                    AppendLog("❌ Failed to send test push notification");
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"❌ Failed to send push notification: {ex.Message}");
-            }
-            finally
-            {
-                SendTestPushButton.IsEnabled = true;
-            }
+            SubscribeButton.IsEnabled = true;
         }
-        
-        private void UpdateStatus(string message, string uri, string expiration)
+
+        // =========================================================================
+        // WNS Push Notification Handlers (Traditional Implementation)
+        // =========================================================================
+
+        private async void InitializeWnsButton_Click(object sender, RoutedEventArgs e)
         {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                StatusTextBlock.Text = message;
-                
-                if (message.Contains("✅") && message.Contains("Channel created"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
-                    _channelUri = uri;
-                    AppendLog($"📋 Channel URI: {uri}");
-                    AppendLog($"⏰ Expires: {expiration}");
-                }
-                else if (message.Contains("❌"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-                }
-                else if (message.Contains("🔄"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
-                }
-                
-                AppendLog(message);
-            });
-        }
-        
-        private async void TroubleshootButton_Click(object sender, RoutedEventArgs e)
-        {
-            TroubleshootButton.IsEnabled = false;
+            InitializeWnsButton.IsEnabled = false;
             
-            try
+            AppendLog("[WNS] 🚀 Initializing traditional WNS push notifications...");
+            
+            bool success = await PushManager.InitializeAsync();
+            
+            if (success)
             {
-                AppendLog("🔧 Starting troubleshooting...");
-                await PushManager.TroubleshootPushIssues();
+                AppendLog("[WNS] ✅ WNS initialization completed! Channel created.");
+                // RegisterWnsButton will be enabled automatically by the ChannelReceived event
             }
-            catch (Exception ex)
+            else
             {
-                AppendLog($"❌ Troubleshooting failed: {ex.Message}");
+                AppendLog("[WNS] ❌ WNS initialization failed.");
             }
-            finally
+            
+            InitializeWnsButton.IsEnabled = true;
+        }
+
+        private async void RegisterWnsButton_Click(object sender, RoutedEventArgs e)
+        {
+            RegisterWnsButton.IsEnabled = false;
+            
+            AppendLog("[WNS] 📤 Registering with SimplePushServer (WNS endpoint)...");
+            
+            bool success = await PushManager.RegisterWithServerAsync("winui3-wns-device", "testuser");
+            
+            if (success)
             {
-                TroubleshootButton.IsEnabled = true;
+                AppendLog("[WNS] 🎉 Complete! SimplePushServer can now send WNS push messages.");
+                AppendLog("[WNS] 💡 Use POST http://localhost:5000/send to test");
             }
+            else
+            {
+                AppendLog("[WNS] ❌ Registration with server failed.");
+            }
+            
+            RegisterWnsButton.IsEnabled = true;
         }
         
         private void AppendLog(string message)
@@ -279,7 +110,7 @@ namespace WinUI3AppForWNSTest
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
             var currentText = LogTextBlock.Text;
             
-            if (currentText == "Log will appear here...")
+            if (currentText == "Choose your push notification implementation above...")
             {
                 LogTextBlock.Text = $"[{timestamp}] {message}";
             }
