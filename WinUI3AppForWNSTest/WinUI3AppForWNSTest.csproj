@@ -11,6 +11,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -44,6 +45,9 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.6584" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.251003001" />
   </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <WebView2UseWinRT>False</WebView2UseWinRT>
+  </PropertyGroup>
 
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution

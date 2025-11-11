@@ -4,7 +4,8 @@
       "commandName": "MsixPackage"
     },
     "WinUI3AppForWNSTest (Unpackaged)": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "----WindowsAppRuntimePushServer:12345678-1234-1234-1234-123456789012"
     }
   }
 }

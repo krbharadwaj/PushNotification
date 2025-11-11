@@ -19,7 +19,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -28,23 +27,11 @@
         <Button Grid.Row="1" x:Name="InitializePushButton" Content="Initialize Push Notifications" 
                 Click="InitializePushButton_Click" Margin="0,0,0,10" HorizontalAlignment="Left"/>
         
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button x:Name="RegisterWithServerButton" Content="Register with Server" 
-                    Click="RegisterWithServerButton_Click" Margin="0,0,10,0" IsEnabled="False" 
-                    Background="Green" Foreground="White"/>
-            <Button x:Name="SendTestPushButton" Content="Send Test Push" 
-                    Click="SendTestPushButton_Click" Margin="0,0,10,0" IsEnabled="False"/>
-            <Button x:Name="TroubleshootButton" Content="Troubleshoot" 
-                    Click="TroubleshootButton_Click" Margin="0,0,10,0"/>
-            <TextBox x:Name="TestMessageTextBox" PlaceholderText="Enter test message" 
-                     Width="200" Margin="0,0,0,0"/>
-        </StackPanel>
-        
-        <TextBlock Grid.Row="3" Text="Status:" FontWeight="Bold" Margin="0,0,0,5"/>
-        <TextBlock Grid.Row="4" x:Name="StatusTextBlock" Text="Not initialized" 
+        <TextBlock Grid.Row="2" Text="Status:" FontWeight="Bold" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="3" x:Name="StatusTextBlock" Text="Not initialized" 
                    Foreground="Gray" Margin="0,0,0,10"/>
         
-        <ScrollViewer Grid.Row="5">
+        <ScrollViewer Grid.Row="4">
             <TextBlock x:Name="LogTextBlock" Text="Log will appear here..." 
                        TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
         </ScrollViewer>

@@ -59,8 +59,8 @@ var TenantId = secrets.GetValueOrDefault("TenantId") ?? Environment.GetEnvironme
 var ClientId = secrets.GetValueOrDefault("ClientId") ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_ID") ?? "YOUR_CLIENT_ID_HERE";
 var ClientSecret = secrets.GetValueOrDefault("ClientSecret") ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET") ?? "YOUR_CLIENT_SECRET_HERE";
 
-// Simple in-memory storage for device registrations
-var registeredDevices = new Dictionary<string, DeviceInfo>();
+// Simple in-memory storage for channel registrations (no device ID needed)
+var registeredChannels = new List<ChannelInfo>();
 
 // Get WNS Access Token
 async Task<string?> GetWnsTokenAsync(HttpClient httpClient)
@@ -100,20 +100,26 @@ async Task<bool> SendPushNotificationAsync(HttpClient httpClient, string channel
 {
     try
     {
-        var payload = JsonSerializer.Serialize(new
-        {
-            message = message,
-            title = title ?? "Notification",
-            timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-        });
+        // Create toast XML for background activation
+        var toastTitle = System.Security.SecurityElement.Escape(title ?? "Notification");
+        var toastMessage = System.Security.SecurityElement.Escape(message);
+        
+        var toastXml = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<toast launch=""app-defined-string"">
+    <visual>
+        <binding template=""ToastGeneric"">
+            <text>{toastTitle}</text>
+            <text>{toastMessage}</text>
+        </binding>
+    </visual>
+</toast>";
 
         var request = new HttpRequestMessage(HttpMethod.Post, channelUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.Add("X-WNS-Type", "wns/raw");
+        request.Headers.Add("X-WNS-Type", "wns/toast");
         request.Headers.Add("X-WNS-RequestForStatus", "true");
         
-        request.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(payload));
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        request.Content = new StringContent(toastXml, Encoding.UTF8, "text/xml");
         
         var response = await httpClient.SendAsync(request);
         
@@ -141,22 +147,26 @@ app.MapGet("/", () => new {
     service = "Simple Push Notification Server", 
     status = "running",
     timestamp = DateTime.UtcNow,
-    registeredDevices = registeredDevices.Count
+    registeredChannels = registeredChannels.Count
 });
 
 app.MapPost("/register", (RegisterRequest request) =>
 {
     try
     {
-        var device = new DeviceInfo(request.DeviceId, request.ChannelUri, request.UserId, DateTime.UtcNow);
-        registeredDevices[request.DeviceId] = device;
+        // Remove old channel for same user if exists
+        registeredChannels.RemoveAll(c => c.UserId == request.UserId);
         
-        Console.WriteLine($"📱 Device registered: {request.DeviceId} for user {request.UserId}");
+        var channel = new ChannelInfo(request.ChannelUri, request.UserId, DateTime.UtcNow);
+        registeredChannels.Add(channel);
+        
+        Console.WriteLine($"📱 Channel registered for user: {request.UserId}");
+        Console.WriteLine($"📋 Total channels: {registeredChannels.Count}");
         
         return Results.Ok(new { 
             success = true, 
-            message = "Device registered successfully",
-            deviceId = request.DeviceId,
+            message = "Channel registered successfully",
+            userId = request.UserId,
             registeredAt = DateTime.UtcNow
         });
     }
@@ -171,12 +181,13 @@ app.MapPost("/send", async (PushRequest request, HttpClient httpClient) =>
 {
     try
     {
-        if (!registeredDevices.TryGetValue(request.DeviceId, out var device))
+        if (registeredChannels.Count == 0)
         {
-            return Results.NotFound(new { success = false, message = "Device not found" });
+            return Results.NotFound(new { success = false, message = "No channels registered" });
         }
 
-        Console.WriteLine($"📤 Sending push to device: {request.DeviceId}");
+        Console.WriteLine($"📤 Broadcasting push to {registeredChannels.Count} channel(s)");
+        Console.WriteLine($"📋 Title: {request.Title ?? "Notification"}");
         Console.WriteLine($"📋 Message: {request.Message}");
         
         // Get WNS token
@@ -186,12 +197,17 @@ app.MapPost("/send", async (PushRequest request, HttpClient httpClient) =>
             return Results.Problem("Failed to get WNS access token");
         }
 
-        // Send notification
-        var success = await SendPushNotificationAsync(httpClient, device.ChannelUri, token, request.Message, request.Title);
+        // Send to all registered channels
+        int successCount = 0;
+        foreach (var channel in registeredChannels.ToList())
+        {
+            var success = await SendPushNotificationAsync(httpClient, channel.ChannelUri, token, request.Message, request.Title);
+            if (success) successCount++;
+        }
         
         return Results.Ok(new { 
-            success = success, 
-            message = success ? "Notification sent successfully" : "Failed to send notification",
+            success = successCount > 0, 
+            message = $"Notification sent to {successCount}/{registeredChannels.Count} channel(s)",
             sentAt = DateTime.UtcNow
         });
     }
@@ -202,16 +218,17 @@ app.MapPost("/send", async (PushRequest request, HttpClient httpClient) =>
     }
 });
 
-app.MapGet("/devices", () => Results.Ok(registeredDevices.Values.ToList()));
+app.MapGet("/channels", () => Results.Ok(registeredChannels.ToList()));
 
-app.MapDelete("/devices/{deviceId}", (string deviceId) =>
+app.MapDelete("/channels/{userId}", (string userId) =>
 {
-    if (registeredDevices.Remove(deviceId))
+    var removed = registeredChannels.RemoveAll(c => c.UserId == userId);
+    if (removed > 0)
     {
-        Console.WriteLine($"🗑️ Device removed: {deviceId}");
-        return Results.Ok(new { success = true, message = "Device removed" });
+        Console.WriteLine($"🗑️ Channel removed for user: {userId}");
+        return Results.Ok(new { success = true, message = "Channel removed" });
     }
-    return Results.NotFound(new { success = false, message = "Device not found" });
+    return Results.NotFound(new { success = false, message = "Channel not found" });
 });
 
 Console.WriteLine("🚀 Simple Push Notification Server");
@@ -221,6 +238,6 @@ Console.WriteLine($"🔑 Azure Tenant: {TenantId}");
 app.Run("http://localhost:5000");
 
 // Models
-record DeviceInfo(string DeviceId, string ChannelUri, string UserId, DateTime RegisteredAt);
-record RegisterRequest(string DeviceId, string ChannelUri, string UserId);
-record PushRequest(string DeviceId, string Message, string? Title = null);
+record ChannelInfo(string ChannelUri, string UserId, DateTime RegisteredAt);
+record RegisterRequest(string ChannelUri, string UserId);
+record PushRequest(string Message, string? Title = null);

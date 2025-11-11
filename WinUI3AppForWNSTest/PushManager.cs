@@ -306,6 +306,9 @@ namespace WinUI3AppForWNSTest
                 Console.WriteLine($"Raw: {payloadString}");
                 Console.WriteLine($"=======================================\n");
                 
+                // Show toast notification with actual message
+                ShowToastSafely(titleText, messageText);
+                
                 // Notify subscribers about the received notification
                 NotificationReceived?.Invoke(payloadString);
             }
@@ -625,7 +628,7 @@ namespace WinUI3AppForWNSTest
         /// <summary>
         /// Register device with SimplePushServer (for background activation testing)
         /// </summary>
-        public static async Task<bool> RegisterWithServerAsync(string deviceId = "winui3-device", string userId = "testuser")
+        public static async Task<bool> RegisterWithServerAsync(string userId = "testuser")
         {
             try
             {
@@ -636,14 +639,12 @@ namespace WinUI3AppForWNSTest
                     return false;
                 }
 
-                StatusUpdated?.Invoke($"🔄 Registering device with SimplePushServer...");
-                StatusUpdated?.Invoke($"📋 Device ID: {deviceId}");
-                StatusUpdated?.Invoke($"📋 Channel: {channelUri.Substring(0, Math.Min(50, channelUri.Length))}...");
+                StatusUpdated?.Invoke($"🔄 Registering with SimplePushServer...");
+                StatusUpdated?.Invoke($"� User ID: {userId}");
 
                 using var client = new System.Net.Http.HttpClient();
                 var registrationData = new
                 {
-                    deviceId = deviceId,
                     channelUri = channelUri,
                     userId = userId
                 };
@@ -839,6 +840,100 @@ namespace WinUI3AppForWNSTest
             catch (Exception ex)
             {
                 Debug.WriteLine($"Cleanup exception: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Handle background payload with comprehensive logging and safe toast display
+        /// </summary>
+        public static async Task HandleBackgroundPayloadAsync(string payload)
+        {
+            try
+            {
+                // Defensive limits
+                if (string.IsNullOrEmpty(payload)) return;
+                if (payload.Length > 200_000) payload = payload.Substring(0, 200_000); // clamp
+
+                // Log to disk for offline debugging
+                string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinUI3PushLogs");
+                Directory.CreateDirectory(logDir);
+                File.AppendAllText(Path.Combine(logDir, "background-activation.txt"),
+                    $"{DateTime.Now:O} Payload length={payload.Length}\n{payload}\n\n");
+
+                // Parse JSON payload to extract title and message
+                string messageText = payload;
+                string titleText = "Background Push";
+
+                try
+                {
+                    using var jsonDoc = System.Text.Json.JsonDocument.Parse(payload);
+                    if (jsonDoc.RootElement.TryGetProperty("message", out var msgEl))
+                    {
+                        messageText = msgEl.GetString() ?? messageText;
+                        File.AppendAllText(Path.Combine(logDir, "background-activation.txt"),
+                            $"✅ Extracted message: {messageText}\n");
+                    }
+                    if (jsonDoc.RootElement.TryGetProperty("title", out var tEl))
+                    {
+                        titleText = tEl.GetString() ?? titleText;
+                        File.AppendAllText(Path.Combine(logDir, "background-activation.txt"),
+                            $"✅ Extracted title: {titleText}\n");
+                    }
+                }
+                catch (Exception parseEx)
+                {
+                    File.AppendAllText(Path.Combine(logDir, "background-activation.txt"),
+                        $"⚠️ JSON parse failed: {parseEx.Message} - using raw payload\n");
+                    // not JSON — use raw payload string
+                }
+
+                // Show toast (clamped lengths)
+                titleText = titleText.Length > 200 ? titleText.Substring(0, 200) : titleText;
+                messageText = messageText.Length > 1000 ? messageText.Substring(0, 1000) : messageText;
+
+                // show the toast (safe call)
+                ShowToastSafely(titleText, messageText);
+                await Task.Delay(200); // allow toast to register
+            }
+            catch (Exception ex)
+            {
+                // best-effort logging
+                try
+                {
+                    File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinUI3PushLogs", "errors.txt"),
+                        $"{DateTime.Now:O} Exception in HandleBackgroundPayloadAsync: {ex}\n");
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>
+        /// Show toast notification safely with minimal native API calls
+        /// </summary>
+        private static void ShowToastSafely(string title, string message)
+        {
+            try
+            {
+                // Toast that launches the app when clicked
+                var toastXml = $@"<toast launch='app-defined-string'>
+                <visual>
+                    <binding template='ToastGeneric'>
+                        <text>{System.Security.SecurityElement.Escape(title)}</text>
+                        <text>{System.Security.SecurityElement.Escape(message)}</text>
+                    </binding>
+                </visual>
+            </toast>";
+
+                var xmlDoc = new Windows.Data.Xml.Dom.XmlDocument();
+                xmlDoc.LoadXml(toastXml);
+
+                var toast = new Windows.UI.Notifications.ToastNotification(xmlDoc);
+                
+                Windows.UI.Notifications.ToastNotificationManager.CreateToastNotifier().Show(toast);
+            }
+            catch
+            {
+                // ignore toast failures in background
             }
         }
     }
