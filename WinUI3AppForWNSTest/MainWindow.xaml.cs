@@ -20,94 +20,100 @@ using Windows.Foundation.Collections;
 namespace WinUI3AppForWNSTest
 {
     /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
+    /// Main window with WebView2 and push notification support
     /// </summary>
     public sealed partial class MainWindow : Window
     {
+        private List<string> _steps = new List<string>();
+        
         public MainWindow()
         {
             InitializeComponent();
+            
+            // Initialize WebView2
+            InitializeWebView();
             
             // Subscribe to push notifications
             PushManager.NotificationReceived += OnPushNotificationReceived;
         }
         
-        private void OnPushNotificationReceived(string payload)
+        private async void InitializeWebView()
         {
-            // Update UI on the UI thread
-            DispatcherQueue.TryEnqueue(() =>
+            try
             {
-                AppendLog($"📩 Push notification received: {payload}");
-            });
+                await WebView.EnsureCoreWebView2Async();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WebView2 initialization error: {ex.Message}");
+            }
         }
         
-        private void OnStatusUpdated(string status)
+        private void OnPushNotificationReceived(string payload)
         {
-            DispatcherQueue.TryEnqueue(() =>
+            // Log in WebView console
+            DispatcherQueue.TryEnqueue(async () =>
             {
-                StatusTextBlock.Text = status;
-                
-                if (status.Contains("✅"))
+                try
                 {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
+                    if (WebView.CoreWebView2 != null)
+                    {
+                        var escapedPayload = System.Text.Json.JsonSerializer.Serialize(payload);
+                        await WebView.CoreWebView2.ExecuteScriptAsync($"console.log('Push received: ' + {escapedPayload})");
+                    }
                 }
-                else if (status.Contains("❌"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-                }
-                else if (status.Contains("🔄"))
-                {
-                    StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
-                }
-                
-                AppendLog(status);
+                catch { }
             });
         }
         
         private async void InitializePushButton_Click(object sender, RoutedEventArgs e)
         {
             InitializePushButton.IsEnabled = false;
-            StatusTextBlock.Text = "Initializing...";
-            StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
-            
-            AppendLog("🔄 Starting push notification initialization...");
+            _steps.Clear();
+            StatusBorder.Visibility = Visibility.Visible;
+            StatusTextBlock.Text = "Initializing Push Notifications...";
+            StepsTextBlock.Text = "";
             
             try
             {
                 // Subscribe to status updates
                 PushManager.StatusUpdated += OnStatusUpdated;
                 
+                AddStep("🔧 Requesting push notification channel...");
                 var success = await PushManager.InitializeAsync();
                 
                 if (success)
                 {
-                    // Automatically register with SimplePushServer after successful initialization
-                    AppendLog("🔄 Auto-registering with SimplePushServer...");
-                    var registrationSuccess = await PushManager.RegisterWithServerAsync("testuser");
+                    AddStep("✅ Push channel created successfully");
                     
-                    if (registrationSuccess)
+                    AddStep("📡 Registering with SimplePushServer...");
+                    await PushManager.RegisterWithServerAsync("testuser");
+                    AddStep("✅ Registered with server");
+                    
+                    StatusTextBlock.Text = "✅ Initialization Complete!";
+                    
+                    // Show success in WebView console
+                    if (WebView.CoreWebView2 != null)
                     {
-                        AppendLog("✅ READY FOR TESTING!");
-                        AppendLog("🎯 You can now:");
-                        AppendLog("   • Close this app to test background push");
-                        AppendLog("   • Send notifications from SimplePushServer");
-                        AppendLog("   • App will show toast when push arrives");
-                        
-                        StatusTextBlock.Text = "✅ Ready for push notifications";
-                        StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
+                        await WebView.CoreWebView2.ExecuteScriptAsync("console.log('✅ Push notifications initialized and registered!')");
                     }
-                    else
-                    {
-                        AppendLog("⚠️ Auto-registration failed");
-                        StatusTextBlock.Text = "Initialized but registration failed";
-                    }
+                }
+                else
+                {
+                    AddStep("❌ Failed to create push channel");
+                    StatusTextBlock.Text = "❌ Initialization Failed";
                 }
             }
             catch (Exception ex)
             {
-                AppendLog($"❌ Initialization failed: {ex.Message}");
-                StatusTextBlock.Text = "Initialization failed";
-                StatusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
+                AddStep($"❌ Error: {ex.Message}");
+                StatusTextBlock.Text = "❌ Initialization Failed";
+                
+                if (WebView.CoreWebView2 != null)
+                {
+                    var escapedError = System.Text.Json.JsonSerializer.Serialize(ex.Message);
+                    await WebView.CoreWebView2.ExecuteScriptAsync($"console.error('Push initialization failed: ' + {escapedError})");
+                }
             }
             finally
             {
@@ -115,19 +121,31 @@ namespace WinUI3AppForWNSTest
             }
         }
         
-        private void AppendLog(string message)
+        private void AddStep(string step)
         {
-            var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            var currentText = LogTextBlock.Text;
+            _steps.Add(step);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                StepsTextBlock.Text = string.Join("\n", _steps);
+            });
+        }
+        
+        private void OnStatusUpdated(string status)
+        {
+            AddStep($"ℹ️ {status}");
             
-            if (currentText == "Log will appear here...")
+            DispatcherQueue.TryEnqueue(async () =>
             {
-                LogTextBlock.Text = $"[{timestamp}] {message}";
-            }
-            else
-            {
-                LogTextBlock.Text = $"{currentText}\n[{timestamp}] {message}";
-            }
+                try
+                {
+                    if (WebView.CoreWebView2 != null)
+                    {
+                        var escapedStatus = System.Text.Json.JsonSerializer.Serialize(status);
+                        await WebView.CoreWebView2.ExecuteScriptAsync($"console.log({escapedStatus})");
+                    }
+                }
+                catch { }
+            });
         }
     }
 }

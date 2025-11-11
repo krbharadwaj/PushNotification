@@ -6,6 +6,7 @@
     xmlns:local="using:WinUI3AppForWNSTest"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     mc:Ignorable="d"
     Title="WinUI3AppForWNSTest">
 
@@ -17,23 +18,29 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Push Notification Test" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+            <Button x:Name="InitializePushButton" Content="Initialize Push Notifications" 
+                    Click="InitializePushButton_Click" />
+        </StackPanel>
         
-        <Button Grid.Row="1" x:Name="InitializePushButton" Content="Initialize Push Notifications" 
-                Click="InitializePushButton_Click" Margin="0,0,0,10" HorizontalAlignment="Left"/>
+        <Border Grid.Row="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,10"
+                x:Name="StatusBorder" Visibility="Collapsed">
+            <StackPanel Spacing="8">
+                <TextBlock x:Name="StatusTextBlock" Text="Initializing..." 
+                          FontWeight="SemiBold" FontSize="14"/>
+                <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="StepsTextBlock" TextWrapping="Wrap" 
+                              FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
         
-        <TextBlock Grid.Row="2" Text="Status:" FontWeight="Bold" Margin="0,0,0,5"/>
-        <TextBlock Grid.Row="3" x:Name="StatusTextBlock" Text="Not initialized" 
-                   Foreground="Gray" Margin="0,0,0,10"/>
-        
-        <ScrollViewer Grid.Row="4">
-            <TextBlock x:Name="LogTextBlock" Text="Log will appear here..." 
-                       TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
-        </ScrollViewer>
+        <controls:WebView2 Grid.Row="2" x:Name="WebView" 
+                          Source="https://example.com" />
     </Grid>
 </Window>
