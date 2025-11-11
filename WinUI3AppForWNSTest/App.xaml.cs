@@ -96,6 +96,20 @@ namespace WinUI3AppForWNSTest
         /// <param name="args">Details about the launch request and process.</param>
         protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
+            // === SINGLE INSTANCE: Check if another instance is already running ===
+            var mainInstance = Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("main");
+            if (!mainInstance.IsCurrent)
+            {
+                // Redirect to existing instance
+                var activationArgs = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
+                await mainInstance.RedirectActivationToAsync(activationArgs);
+                System.Diagnostics.Process.GetCurrentProcess().Kill();
+                return;
+            }
+            
+            // Register for activation redirection
+            Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().Activated += App_Activated;
+            
             // === DIAGNOSTIC: Detect background push activation ===
             try
             {
@@ -244,6 +258,30 @@ namespace WinUI3AppForWNSTest
             _window = new MainWindow();
             _window.Activate();
         }
+
+        /// <summary>
+        /// Handle activation when redirected from another instance
+        /// </summary>
+        private void App_Activated(object? sender, AppActivationArguments e)
+        {
+            // Bring existing window to foreground
+            if (_window != null)
+            {
+                // Dispatch to UI thread
+                _window.DispatcherQueue.TryEnqueue(() =>
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+                    ShowWindow(hwnd, 9); // SW_RESTORE
+                    SetForegroundWindow(hwnd);
+                });
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     }
 }
